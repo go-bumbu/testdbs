@@ -145,7 +145,7 @@ func (c *testDBMysql) ConnDbName(name string) *gorm.DB {
 		panic(err)
 	}
 
-	dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", mysqlUser, mysqlPassword, c.host, c.port, defaultDbName)
+	dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", mysqlUser, mysqlPassword, c.host, c.port, name)
 	gormDb, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: c.logger,
 	})

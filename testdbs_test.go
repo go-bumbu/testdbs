@@ -74,6 +74,30 @@ func TestStartDbNew(t *testing.T) {
 				if diff := cmp.Diff(writtenItem, readItem, cmp.AllowUnexported(Item{})); diff != "" {
 					t.Errorf("Mismatch (-written +read):\n%s", diff)
 				}
+
+				// second DB conn
+				db2 := dbt.ConnDbName("custom")
+
+				var readItem2 Item
+				db2.First(&readItem2, writtenItem.ID) // Fetch the first item by ID
+
+				if diff := cmp.Diff(writtenItem, readItem2, cmp.AllowUnexported(Item{})); diff != "" {
+					t.Errorf("Mismatch (-written +read):\n%s", diff)
+				}
+
+				// 3rd DB conn
+				db3 := dbt.ConnDbName("custom2")
+				err = db3.AutoMigrate(&Item{})
+				if err != nil {
+					t.Fatalf("error in automigrate: %s", err)
+				}
+
+				var readItem3 Item
+				db3.First(&readItem3, writtenItem.ID) // Fetch the first item by ID
+
+				if diff := cmp.Diff(Item{}, readItem3, cmp.AllowUnexported(Item{})); diff != "" {
+					t.Errorf("Mismatch (-written +read):\n%s", diff)
+				}
 			})
 		}
 	})

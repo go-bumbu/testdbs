@@ -7,7 +7,7 @@ default: help
 ##@ Testing
 #==========================================================================================
 test: ## run fast go tests
-	@go test ./...  -cover
+	@go test ./... -alldbs  -cover
 
 lint: ## run go linter
 	@# depends on https://github.com/golangci/golangci-lint
