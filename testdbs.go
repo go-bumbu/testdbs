@@ -119,17 +119,26 @@ func normalizeDbName(input string) string {
 	if len(input) > 64 {
 		input = input[:64]
 	}
+	input = strings.Trim(input, "/")
+	input = strings.Trim(input, "\\")
+	input = strings.Trim(input, ".")
 
 	// Replace '/', '\', and '.' with '-'
-	replacer := strings.NewReplacer("/", "-", "\\", "-", ".", "-")
+	replacer := strings.NewReplacer("/", "", "\\", "", ".", "")
 	input = replacer.Replace(input)
 
 	// Replace spaces with '-'
-	input = strings.ReplaceAll(input, " ", "-")
+	input = strings.ReplaceAll(input, " ", "")
+
+	// remove
+	input = strings.TrimPrefix(input, "-")
+	input = strings.TrimSuffix(input, "-")
 
 	// Remove any characters that are not permitted in file names
 	illegalChars := regexp.MustCompile(`[^a-zA-Z0-9\-_]`)
 	input = illegalChars.ReplaceAllString(input, "")
+
+	input = strings.ToLower(input)
 
 	return input
 }

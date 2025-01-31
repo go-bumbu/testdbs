@@ -183,7 +183,7 @@ type SqliteCgo struct {
 }
 
 func (c *SqliteCgo) DbType() string {
-	return DBTypeSqliteNOCgo
+	return DBTypeSqliteCgo
 }
 func (c *SqliteCgo) Init(logger logger.Interface) {
 	c.logger = logger
@@ -208,7 +208,7 @@ func (c *SqliteCgo) ConnDbName(name string) *gorm.DB {
 	if exists {
 		return dbConn
 	}
-	dbFile := dbPath(name, noCgoSqliteSuffix, c.dir, c.isLocal)
+	dbFile := dbPath(name, CgoSqliteSuffix, c.dir, c.isLocal)
 	if _, err := os.Stat(dbFile); err == nil {
 		err = os.RemoveAll(dbFile)
 		if err != nil {

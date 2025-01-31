@@ -102,4 +102,31 @@ func TestStartDbNew(t *testing.T) {
 		}
 	})
 
+	t.Run("customDbTestName", func(t *testing.T) {
+		for _, dbt := range testdbs.DBs() {
+			t.Run(dbt.DbType(), func(t *testing.T) {
+				db := dbt.ConnDbName(t.Name())
+
+				err := db.AutoMigrate(&Item{})
+				if err != nil {
+					t.Fatalf("error in automigrate: %s", err)
+				}
+
+				writtenItem := Item{Name: "Sample Item"}
+				result := db.Create(&writtenItem) // Write item to the database
+				if result.Error != nil {
+					log.Fatalf("Failed to create item: %v", result.Error)
+				}
+
+				var readItem Item
+				db.First(&readItem, writtenItem.ID) // Fetch the first item by ID
+
+				if diff := cmp.Diff(writtenItem, readItem, cmp.AllowUnexported(Item{})); diff != "" {
+					t.Errorf("Mismatch (-written +read):\n%s", diff)
+				}
+
+			})
+		}
+	})
+
 }
