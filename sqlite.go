@@ -101,6 +101,7 @@ func (c *SqliteNoCgo) Conn() *gorm.DB {
 }
 
 func (c *SqliteNoCgo) ConnDbName(name string) *gorm.DB {
+	name = normalizeDbName(name)
 	dbConn, exists := c.pool[name]
 	if exists {
 		return dbConn
@@ -202,6 +203,7 @@ func (c *SqliteCgo) Conn() *gorm.DB {
 }
 
 func (c *SqliteCgo) ConnDbName(name string) *gorm.DB {
+	name = normalizeDbName(name)
 	dbConn, exists := c.pool[name]
 	if exists {
 		return dbConn

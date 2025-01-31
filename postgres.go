@@ -120,6 +120,7 @@ func (c *testDBPostgres) Conn() *gorm.DB {
 }
 
 func (c *testDBPostgres) ConnDbName(name string) *gorm.DB {
+	name = normalizeDbName(name)
 	dbConn, exists := c.pool[name]
 	if exists {
 		return dbConn

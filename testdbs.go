@@ -7,7 +7,9 @@ import (
 	"gorm.io/gorm/logger"
 	"log"
 	"os"
+	"regexp"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -110,4 +112,24 @@ func testAll() bool {
 		panic("testing: testAll called before Parse")
 	}
 	return *runAllDbs
+}
+
+func normalizeDbName(input string) string {
+	// Limit length to 64 characters
+	if len(input) > 64 {
+		input = input[:64]
+	}
+
+	// Replace '/', '\', and '.' with '-'
+	replacer := strings.NewReplacer("/", "-", "\\", "-", ".", "-")
+	input = replacer.Replace(input)
+
+	// Replace spaces with '-'
+	input = strings.ReplaceAll(input, " ", "-")
+
+	// Remove any characters that are not permitted in file names
+	illegalChars := regexp.MustCompile(`[^a-zA-Z0-9\-_]`)
+	input = illegalChars.ReplaceAllString(input, "")
+
+	return input
 }
