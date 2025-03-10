@@ -111,7 +111,7 @@ func (c *testDBMysql) Init(logger logger.Interface) {
 			}
 		}
 		c.clean = cleanFn
-		c.pool[defaultDbName] = db
+		c.pool[normalizeDbName(defaultDbName)] = db
 	})
 }
 

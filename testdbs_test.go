@@ -16,6 +16,14 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		os.Exit(1)
 	}
+
+	// check for routine leaks
+	// TODO currently it does not work, seems like postgres is not closing .connectionOpener
+	//if err = goleak.Find(); err != nil {
+	//	fmt.Printf("found routine leak: %v\n", err)
+	//	os.Exit(1)
+	//}
+
 	os.Exit(code)
 }
 
@@ -25,7 +33,6 @@ type Item struct {
 }
 
 func TestStartDbNew(t *testing.T) {
-
 	t.Run("defaultDB", func(t *testing.T) {
 		for _, dbt := range testdbs.DBs() {
 			t.Run(dbt.DbType(), func(t *testing.T) {
@@ -128,5 +135,4 @@ func TestStartDbNew(t *testing.T) {
 			})
 		}
 	})
-
 }

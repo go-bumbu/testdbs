@@ -54,3 +54,12 @@ func TestMyFunction(t *testing.T) {
 
 As a default calling `go test` will only start an embedded sqlite on a temp directory, to run the tests with
 all the supported DBs you need to call `go test -alldbs`
+
+## sqlite
+
+if you want to inspect the sqlite database after running the tests you can set the env `LOCAL_SQLITE` to true
+and this will create the DB in the current working dir
+
+```
+export LOCAL_SQLITE=true
+```

@@ -31,11 +31,29 @@ func (c *testDBPostgres) Close(name string) error {
 	if !exists {
 		return fmt.Errorf("db connection with name %s not found", name)
 	}
-	under, err := db.DB()
+	underlyingDb, err := db.DB()
 	if err != nil {
 		return fmt.Errorf("unable to get underlying DB: %w", err)
 	}
-	return under.Close()
+
+	// Set the max connections to zero before closing
+	underlyingDb.SetMaxOpenConns(1)
+	underlyingDb.SetMaxIdleConns(0)
+	underlyingDb.SetConnMaxLifetime(time.Microsecond)
+
+	// Wait a little to allow existing connections to close
+	time.Sleep(100 * time.Millisecond)
+
+	// Close the database connection
+	err = underlyingDb.Close()
+	if err != nil {
+		return fmt.Errorf("error closing database connection: %w", err)
+	}
+
+	// Remove from pool
+	delete(c.pool, name)
+
+	return nil
 }
 
 func (c *testDBPostgres) CloseAll() error {
@@ -47,6 +65,7 @@ func (c *testDBPostgres) CloseAll() error {
 			merr = multierror.Append(merr, err)
 		}
 	}
+	c.pool = nil
 	return merr
 }
 
@@ -111,7 +130,7 @@ func (c *testDBPostgres) Init(logger logger.Interface) {
 			}
 		}
 		c.clean = cleanFn
-		c.pool[defaultDbName] = db
+		c.pool[normalizeDbName(defaultDbName)] = db
 	})
 }
 

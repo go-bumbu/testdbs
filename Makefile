@@ -7,19 +7,20 @@ default: help
 ##@ Testing
 #==========================================================================================
 test: ## run fast go tests
+	# run go tests
 	@go test ./... -alldbs  -cover
 
 lint: ## run go linter
-	@# depends on https://github.com/golangci/golangci-lint
+	# check lining, depends on https://github.com/golangci/golangci-lint
 	@golangci-lint run
 
 license-check: ## check for invalid licenses
-	@# depends on : https://github.com/elastic/go-licence-detector
-	@go list -m -mod=readonly  -json all  | go-licence-detector -includeIndirect -validate -rules allowedLicenses.json
-
+	# Check licenses, depends on https://github.com/elastic/go-licence-detector
+	@go list -m -mod=readonly  -json all  | go-licence-detector -includeIndirect -rules allowedLicenses.json \
+	-overrides overrideLicenses.json
 
 .PHONY: verify
-verify: license-check lint  ## run all tests
+verify: license-check lint test ## run all tests
 
 #==========================================================================================
 ##@ Release
@@ -40,7 +41,6 @@ check-branch:
 check_env: # check for needed envs
 	@[ "${version}" ] || ( echo ">> version is not set, usage: make release version=\"v1.2.3\" "; exit 1 )
 
-
 tag: check_env check-branch check-git-clean verify ## create a tag and push to git
 	@git diff --quiet || ( echo 'git is in dirty state' ; exit 1 )
 	@[ "${version}" ] || ( echo ">> version is not set, usage: make release version=\"v1.2.3\" "; exit 1 )
@@ -48,8 +48,6 @@ tag: check_env check-branch check-git-clean verify ## create a tag and push to g
 	@git tag -a $(version) -m "Release version: $(version)"
 	@git push --delete origin $(version) || true
 	@git push origin $(version) || true
-
-
 
 #==========================================================================================
 #  Help
