@@ -1,8 +1,10 @@
 package testdbs_test
 
 import (
+	"fmt"
 	"github.com/go-bumbu/testdbs"
 	"github.com/google/go-cmp/cmp"
+	"go.uber.org/goleak"
 	"log"
 	"os"
 	"testing"
@@ -17,13 +19,16 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	// check for routine leaks
-	// TODO currently it does not work, seems like postgres is not closing .connectionOpener
-	//if err = goleak.Find(); err != nil {
-	//	fmt.Printf("found routine leak: %v\n", err)
-	//	os.Exit(1)
-	//}
-
+	//check for routine leaks
+	opts := []goleak.Option{
+		// Not ideal: ignore the SQL connection opener.
+		// TODO: explore the impact of the connectionOpener routine being still still running after closing the db connection
+		goleak.IgnoreAnyFunction("database/sql.(*DB).connectionOpener"),
+	}
+	if err := goleak.Find(opts...); err != nil {
+		fmt.Printf("found routine leak: %v\n", err)
+		os.Exit(1)
+	}
 	os.Exit(code)
 }
 
