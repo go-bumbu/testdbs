@@ -59,7 +59,7 @@ func (c *testDBPostgres) Close(name string) error {
 func (c *testDBPostgres) CloseAll() error {
 	defer c.clean()
 	var merr error
-	for name, _ := range c.pool {
+	for name := range c.pool {
 		err := c.Close(name)
 		if err != nil {
 			merr = multierror.Append(merr, err)
@@ -146,12 +146,23 @@ func (c *testDBPostgres) ConnDbName(name string) *gorm.DB {
 	}
 
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s  sslmode=disable", c.host, c.port, postgresUser, postgresPassword, defaultDbName)
-	DB, _ := gorm.Open(postgres.Open(dsn), &gorm.Config{
+	admin, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: c.logger,
 	})
+	if err != nil {
+		panic(fmt.Sprintf("failed to connect to PostgreSQL test database: %v", err))
+	}
 
 	createDatabaseCommand := fmt.Sprintf("CREATE DATABASE %s", name)
-	DB.Exec(createDatabaseCommand)
+	admin.Exec(createDatabaseCommand)
+
+	// Close the admin connection used only to create the database. Without this
+	// its pool stays open for the life of the process, so creating many test
+	// databases exhausts the server's connection limit ("too many clients
+	// already"). MySQL's ConnDbName already does this via defer.
+	if sqlDB, err := admin.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
 
 	dsn = fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=disable", c.host, c.port, postgresUser, name, postgresPassword)
 	gormDb, err := gorm.Open(postgres.Open(dsn), &gorm.Config{

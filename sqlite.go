@@ -21,16 +21,8 @@ func dbPath(name, suffix, tmpdir string, isLocal bool) string {
 	dbName := fmt.Sprintf("%s.%s.sqlite", name, suffix)
 	if isLocal {
 		tmpdir = "./" + testDbDir + "_sqlite"
-
-		if _, err := os.Stat(tmpdir); err == nil {
-			// dir exists, skip
-		} else if errors.Is(err, os.ErrNotExist) {
-			err = os.Mkdir(tmpdir, 0750)
-			if err != nil {
-				panic(fmt.Sprintf("error creating local temporary directory: %v", err))
-			}
-		} else {
-			panic(fmt.Sprintf("error while doing stat on dbfile: %v", err))
+		if err := os.MkdirAll(tmpdir, 0750); err != nil {
+			panic(fmt.Sprintf("error creating local temporary directory: %v", err))
 		}
 	}
 	return fmt.Sprintf("%s/%s", tmpdir, dbName)
@@ -156,7 +148,7 @@ func (c *SqliteNoCgo) Close(name string) error {
 
 func (c *SqliteNoCgo) CloseAll() error {
 	var merr error
-	for name, _ := range c.pool {
+	for name := range c.pool {
 		err := c.Close(name)
 		if err != nil {
 			merr = multierror.Append(merr, err)
@@ -258,7 +250,7 @@ func (c *SqliteCgo) Close(name string) error {
 
 func (c *SqliteCgo) CloseAll() error {
 	var merr error
-	for name, _ := range c.pool {
+	for name := range c.pool {
 		err := c.Close(name)
 		if err != nil {
 			merr = multierror.Append(merr, err)
