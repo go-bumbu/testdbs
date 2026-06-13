@@ -14,12 +14,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # go-licence-detector v0.10.0 needs Go >= 1.24; this module targets
-      # 1.23.4 (see go.mod), so pin a newer toolchain just for the tool.
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25.4'
+          go-version-file: go.mod
 
       # Install go-licence-detector
       - name: Install go-licence-detector
