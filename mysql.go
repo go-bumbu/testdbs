@@ -42,7 +42,7 @@ func (c *testDBMysql) Close(name string) error {
 func (c *testDBMysql) CloseAll() error {
 	defer c.clean()
 	var merr error
-	for name, _ := range c.pool {
+	for name := range c.pool {
 		err := c.Close(name)
 		if err != nil {
 			merr = multierror.Append(merr, err)
@@ -131,7 +131,7 @@ func (c *testDBMysql) ConnDbName(name string) *gorm.DB {
 	if err != nil {
 		panic(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	_, err = db.Exec("CREATE DATABASE IF NOT EXISTS " + name)
 	if err != nil {
 		panic(err)

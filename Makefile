@@ -6,9 +6,11 @@ default: help
 #==========================================================================================
 ##@ Testing
 #==========================================================================================
-test: ## run fast go tests
-	# run go tests
-	@go test ./... -alldbs  -cover
+test: ## run go tests across all DBs (testcontainers, needs Docker)
+	@go test ./... -alldbs
+
+test-race: ## run all DBs with the race detector and a coverage report
+	@go test ./... -alldbs -race -cover
 
 lint: ## run go linter
 	# check lining, depends on https://github.com/golangci/golangci-lint
@@ -20,7 +22,7 @@ license-check: ## check for invalid licenses
 	-overrides overrideLicenses.json
 
 .PHONY: verify
-verify: license-check lint test ## run all tests
+verify: lint license-check test-race ## run all checks (full DB matrix)
 
 #==========================================================================================
 ##@ Release
