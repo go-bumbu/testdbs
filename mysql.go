@@ -76,7 +76,14 @@ func (c *testDBMysql) Init(logger logger.Interface) {
 				"MYSQL_USER":          mysqlUser,
 				"MYSQL_PASSWORD":      mysqlPassword,
 			},
-			WaitingFor: wait.ForListeningPort("3306/tcp").WithStartupTimeout(60 * time.Second),
+			// mysql:8.0 opens port 3306 for a temporary init server, then
+			// restarts the real one. Waiting only for the port races into that
+			// init window (intermittent "unexpected EOF" / "invalid connection").
+			// "ready for connections" is logged twice: wait for the second.
+			WaitingFor: wait.ForAll(
+				wait.ForLog(".*ready for connections.*").AsRegexp().WithOccurrence(2).WithStartupTimeout(60*time.Second),
+				wait.ForListeningPort("3306/tcp").WithStartupTimeout(60*time.Second),
+			),
 		}
 		mysqlContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 			ContainerRequest: req,

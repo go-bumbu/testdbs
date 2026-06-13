@@ -93,7 +93,13 @@ func (c *testDBPostgres) Init(logger logger.Interface) {
 				"POSTGRES_PASSWORD": postgresPassword,
 				"POSTGRES_DB":       defaultDbName,
 			},
-			WaitingFor: wait.ForListeningPort("5432/tcp").WithStartupTimeout(60 * time.Second),
+			// postgres:13 starts a temporary server during initdb, then restarts
+			// the real one. Waiting only for the port races into that init window.
+			// "ready to accept connections" is logged twice: wait for the second.
+			WaitingFor: wait.ForAll(
+				wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(60*time.Second),
+				wait.ForListeningPort("5432/tcp").WithStartupTimeout(60*time.Second),
+			),
 		}
 
 		postgresContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
