@@ -1,0 +1,21 @@
+name: golang
+on: [push]
+jobs:
+  test:
+    # ubuntu-latest ships a working Docker daemon, which testcontainers-go
+    # uses to spin up the MySQL / PostgreSQL / CGo-SQLite backends. Unlike
+    # consumers of this library, testdbs runs the full -alldbs matrix in CI:
+    # launching those containers is the core behaviour under test.
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: 1
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: run tests
+        run: make test
