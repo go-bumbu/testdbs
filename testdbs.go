@@ -38,6 +38,9 @@ func InitDBS() {
 	InitCustomDbs(fast, long)
 }
 
+// InitCustomDbs initializes the given DBs and makes them available through
+// DBs(). fastDbs always run; longDBs run only when the -alldbs flag or the
+// TESTDBS_ALL env var is set. Call it once, from TestMain.
 func InitCustomDbs(fastDbs, longDBs []TargetDb) {
 
 	gormLogger := logger.New(
@@ -52,16 +55,10 @@ func InitCustomDbs(fastDbs, longDBs []TargetDb) {
 
 	flag.Parse()
 
-	allDbs := false
-	_, testAllEnv := os.LookupEnv(RunAllDBsEnv)
-	if testAllEnv || testAll() {
-		allDbs = true
-	}
-
 	dbs := fastDbs
 
 	// also run slow DBs
-	if allDbs {
+	if slowDBsEnabled() {
 		for _, db := range longDBs {
 			if !slices.Contains(dbs, db) {
 				dbs = append(dbs, db)
@@ -73,14 +70,22 @@ func InitCustomDbs(fastDbs, longDBs []TargetDb) {
 		db.Init(gormLogger)
 		targetDBS = append(targetDBS, db)
 	}
-
+	initialized = true
 }
 
-var targetDBS = []TargetDb{}
+var (
+	targetDBS = []TargetDb{}
+	// initialized records that InitDBS or InitCustomDbs ran, even when it
+	// selected no DBs.
+	initialized bool
+)
 
+// DBs returns the DBs selected by InitDBS or InitCustomDbs. The list is empty
+// when only slow DBs were registered and neither -alldbs nor TESTDBS_ALL is
+// set, so tests should skip in that case. DBs panics if no init function ran.
 func DBs() []TargetDb {
-	if len(targetDBS) == 0 {
-		panic("testdbs were not initialized, run InitDBS() before calling DBs()")
+	if !initialized {
+		panic("testdbs were not initialized, run InitDBS() or InitCustomDbs() before calling DBs()")
 	}
 	return targetDBS
 }
@@ -112,6 +117,13 @@ func testAll() bool {
 		panic("testing: testAll called before Parse")
 	}
 	return *runAllDbs
+}
+
+// slowDBsEnabled reports whether the slow DBs were requested, with the
+// -alldbs flag or the TESTDBS_ALL env var.
+func slowDBsEnabled() bool {
+	_, env := os.LookupEnv(RunAllDBsEnv)
+	return env || testAll()
 }
 
 func normalizeDbName(input string) string {
