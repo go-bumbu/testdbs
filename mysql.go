@@ -68,7 +68,7 @@ func (c *testDBMysql) Init(logger logger.Interface) {
 		ctx := context.Background()
 
 		req := testcontainers.ContainerRequest{
-			Image:        "mysql:8.0",
+			Image:        "mysql:9.7",
 			ExposedPorts: []string{"3306/tcp"},
 			Env: map[string]string{
 				"MYSQL_ROOT_PASSWORD": mysqlPassword,
@@ -76,12 +76,13 @@ func (c *testDBMysql) Init(logger logger.Interface) {
 				"MYSQL_USER":          mysqlUser,
 				"MYSQL_PASSWORD":      mysqlPassword,
 			},
-			// mysql:8.0 opens port 3306 for a temporary init server, then
-			// restarts the real one. Waiting only for the port races into that
-			// init window (intermittent "unexpected EOF" / "invalid connection").
-			// "ready for connections" is logged twice: wait for the second.
+			// The mysql image runs a temporary server for init (no TCP, logged
+			// with "port: 0"), then restarts the real one. Waiting only for the
+			// port proved flaky (intermittent "unexpected EOF" / "invalid
+			// connection"), and both servers, plus their X Plugin, log "ready
+			// for connections", so wait for the real server's line on port 3306.
 			WaitingFor: wait.ForAll(
-				wait.ForLog(".*ready for connections.*").AsRegexp().WithOccurrence(2).WithStartupTimeout(60*time.Second),
+				wait.ForLog(`mysqld: ready for connections.*port: 3306\b`).AsRegexp().WithStartupTimeout(60*time.Second),
 				wait.ForListeningPort("3306/tcp").WithStartupTimeout(60*time.Second),
 			),
 		}

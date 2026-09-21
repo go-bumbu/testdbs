@@ -7,7 +7,7 @@ default: help
 ##@ Testing
 #==========================================================================================
 test: ## run go tests across all DBs (testcontainers, needs Docker)
-	@go test ./... -alldbs
+	@go test ./... -alldbs -cover
 
 test-race: ## run all DBs with the race detector and a coverage report
 	@go test ./... -alldbs -race -cover
@@ -21,8 +21,40 @@ license-check: ## check for invalid licenses
 	@go list -m -mod=readonly  -json all  | go-licence-detector -includeIndirect -rules allowedLicenses.json \
 	-overrides overrideLicenses.json
 
+# Default coverage threshold is 80
+COVERAGE_THRESHOLD ?= 80
+
+# -alldbs must follow the package list: placed before it, go test passes ./...
+# to the test binary and only tests the current directory.
+.PHONY: coverage
+coverage: ## check code coverage per package
+	@out=$$(go test ./... -alldbs -cover -covermode=atomic) || { echo "$$out"; exit 1; }; \
+	echo "$$out" | awk -v threshold=$(COVERAGE_THRESHOLD) ' \
+		/\[no test files\]/ { printf "⚠️  %-70s no test files\n", $$2; next } \
+		/\[no statements\]/ { printf "⚠️  %-70s no statements\n", $$2; next } \
+		/coverage:/ { \
+			for (i = 1; i <= NF; i++) if ($$i == "coverage:") { cov = $$(i+1); sub(/%/, "", cov); break }; \
+			if (cov + 0 < threshold) { printf "❌ %-70s %s%% (below %s%%)\n", $$2, cov, threshold; fail = 1 } \
+			else { printf "✅ %-70s %s%%\n", $$2, cov } \
+		} \
+		END { \
+			if (fail) { printf "❌ coverage below threshold (%s%%)\n", threshold } \
+			else { printf "✅ coverage: all packages >= %s%%\n", threshold }; \
+			exit fail \
+		}'
+
 .PHONY: verify
-verify: lint license-check test-race ## run all checks (full DB matrix)
+verify: ## run all checks (full DB matrix); runs every check and fails if any fail
+	@fail=0; \
+	for target in test-race license-check lint coverage; do \
+		echo "==================== make $$target ===================="; \
+		$(MAKE) --no-print-directory $$target || fail=1; \
+	done; \
+	if [ $$fail -ne 0 ]; then \
+		echo "❌ verify failed (see above)"; \
+		exit 1; \
+	fi; \
+	echo "✅ verify passed"
 
 #==========================================================================================
 ##@ Release
