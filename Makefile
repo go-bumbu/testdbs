@@ -27,11 +27,14 @@ verify: lint license-check test-race ## run all checks (full DB matrix)
 # Default coverage threshold is 80
 COVERAGE_THRESHOLD ?= 80
 
+# -alldbs must follow the package list: placed before it, go test passes ./...
+# to the test binary and only tests the current directory.
 .PHONY: coverage
 coverage: ## check code coverage per package
-	@out=$$(go test -cover -covermode=atomic -alldbs ./...) || { echo "$$out"; exit 1; }; \
+	@out=$$(go test ./... -alldbs -cover -covermode=atomic) || { echo "$$out"; exit 1; }; \
 	echo "$$out" | awk -v threshold=$(COVERAGE_THRESHOLD) ' \
 		/\[no test files\]/ { printf "⚠️  %-70s no test files\n", $$2; next } \
+		/\[no statements\]/ { printf "⚠️  %-70s no statements\n", $$2; next } \
 		/coverage:/ { \
 			for (i = 1; i <= NF; i++) if ($$i == "coverage:") { cov = $$(i+1); sub(/%/, "", cov); break }; \
 			if (cov + 0 < threshold) { printf "❌ %-70s %s%% (below %s%%)\n", $$2, cov, threshold; fail = 1 } \
