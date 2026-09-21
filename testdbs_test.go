@@ -141,3 +141,22 @@ func TestStartDbNew(t *testing.T) {
 		}
 	})
 }
+
+func TestCloseNamedDb(t *testing.T) {
+	for _, dbt := range testdbs.DBs() {
+		// SQLite's Close also deletes the target's temp dir, which the other
+		// tests still use; sqlite_internal_test.go covers it on fresh targets.
+		if dbt.DbType() != testdbs.DBTypeMysql && dbt.DbType() != testdbs.DBTypePostgres {
+			continue
+		}
+		t.Run(dbt.DbType(), func(t *testing.T) {
+			dbt.ConnDbName("closeme")
+			if err := dbt.Close("closeme"); err != nil {
+				t.Errorf("Close(closeme) = %v, want nil", err)
+			}
+			if err := dbt.Close("missing"); err == nil {
+				t.Error("Close(missing) = nil, want an error")
+			}
+		})
+	}
+}
