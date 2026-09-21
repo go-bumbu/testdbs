@@ -12,8 +12,8 @@ func TestNewPostgresImage(t *testing.T) {
 		image string
 		want  string
 	}{
-		{name: "empty image uses the default", image: "", want: "postgres:13"},
-		{name: "custom image is used as given", image: "pgvector/pgvector:pg17", want: "pgvector/pgvector:pg17"},
+		{name: "empty image uses the default", image: "", want: "postgres:18"},
+		{name: "custom image is used as given", image: "pgvector/pgvector:pg18", want: "pgvector/pgvector:pg18"},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -30,8 +30,8 @@ func TestNewPostgresImage(t *testing.T) {
 
 	// InitDBS builds the zero value directly; it must keep the default.
 	t.Run("zero value uses the default", func(t *testing.T) {
-		if got := (&testDBPostgres{}).imageName(); got != "postgres:13" {
-			t.Errorf("image = %q, want %q", got, "postgres:13")
+		if got := (&testDBPostgres{}).imageName(); got != "postgres:18" {
+			t.Errorf("image = %q, want %q", got, "postgres:18")
 		}
 	})
 }
@@ -43,7 +43,7 @@ func TestNewPostgresPgvector(t *testing.T) {
 	if !slowDBsEnabled() {
 		t.Skip("starts a container: run with -alldbs or TESTDBS_ALL")
 	}
-	pg := NewPostgres("pgvector/pgvector:pg17")
+	pg := NewPostgres("pgvector/pgvector:pg18")
 	pg.Init(logger.Discard)
 	t.Cleanup(func() {
 		if err := pg.CloseAll(); err != nil {

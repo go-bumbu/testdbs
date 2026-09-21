@@ -58,13 +58,13 @@ the fast DBs always run, the slow ones only with `-alldbs` or `TESTDBS_ALL`.
 ### Postgres with another image
 
 `NewPostgres(image)` runs any image that starts like the official `postgres`
-image; an empty image keeps the default, `postgres:13`. For example, for the
+image; an empty image keeps the default, `postgres:18`. For example, for the
 pgvector extension:
 
 ```go
 func TestMain(m *testing.M) {
 	testdbs.InitCustomDbs(nil, []testdbs.TargetDb{
-		testdbs.NewPostgres("pgvector/pgvector:pg17"),
+		testdbs.NewPostgres("pgvector/pgvector:pg18"),
 	})
 	code := m.Run()
 	if err := testdbs.Clean(); err != nil {

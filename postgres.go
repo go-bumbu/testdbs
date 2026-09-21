@@ -16,7 +16,7 @@ import (
 const (
 	DBTypePostgres = "postgres"
 	// defaultPostgresImage runs when no image is given.
-	defaultPostgresImage = "postgres:13"
+	defaultPostgresImage = "postgres:18"
 )
 
 type testDBPostgres struct {
@@ -30,7 +30,7 @@ type testDBPostgres struct {
 }
 
 // NewPostgres returns a Postgres target that runs image instead of the default
-// postgres:13, e.g. "pgvector/pgvector:pg17" for the vector extension. An empty
+// postgres:18, e.g. "pgvector/pgvector:pg18" for the vector extension. An empty
 // image keeps the default. The image must start like the official postgres
 // image: same env vars, and "database system is ready to accept connections"
 // logged twice (initdb's temporary server, then the real one).

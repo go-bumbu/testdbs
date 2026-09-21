@@ -68,7 +68,7 @@ func (c *testDBMysql) Init(logger logger.Interface) {
 		ctx := context.Background()
 
 		req := testcontainers.ContainerRequest{
-			Image:        "mysql:8.0",
+			Image:        "mysql:9.7",
 			ExposedPorts: []string{"3306/tcp"},
 			Env: map[string]string{
 				"MYSQL_ROOT_PASSWORD": mysqlPassword,
