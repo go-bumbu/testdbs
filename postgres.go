@@ -15,15 +15,35 @@ import (
 
 const (
 	DBTypePostgres = "postgres"
+	// defaultPostgresImage runs when no image is given.
+	defaultPostgresImage = "postgres:13"
 )
 
 type testDBPostgres struct {
+	image  string // empty means defaultPostgresImage
 	once   sync.Once
 	logger logger.Interface
 	host   string
 	port   string
 	pool   map[string]*gorm.DB
 	clean  func()
+}
+
+// NewPostgres returns a Postgres target that runs image instead of the default
+// postgres:13, e.g. "pgvector/pgvector:pg17" for the vector extension. An empty
+// image keeps the default. The image must start like the official postgres
+// image: same env vars, and "database system is ready to accept connections"
+// logged twice (initdb's temporary server, then the real one).
+func NewPostgres(image string) TargetDb {
+	return &testDBPostgres{image: image}
+}
+
+// imageName returns the image to run, falling back to the default.
+func (c *testDBPostgres) imageName() string {
+	if c.image == "" {
+		return defaultPostgresImage
+	}
+	return c.image
 }
 
 func (c *testDBPostgres) Close(name string) error {
@@ -86,16 +106,18 @@ func (c *testDBPostgres) Init(logger logger.Interface) {
 		ctx := context.Background()
 
 		req := testcontainers.ContainerRequest{
-			Image:        "postgres:13",
+			Image:        c.imageName(),
 			ExposedPorts: []string{"5432/tcp"},
 			Env: map[string]string{
 				"POSTGRES_USER":     postgresUser,
 				"POSTGRES_PASSWORD": postgresPassword,
 				"POSTGRES_DB":       defaultDbName,
 			},
-			// postgres:13 starts a temporary server during initdb, then restarts
-			// the real one. Waiting only for the port races into that init window.
-			// "ready to accept connections" is logged twice: wait for the second.
+			// The official postgres image, and images built on it such as
+			// pgvector/pgvector, starts a temporary server during initdb, then
+			// restarts the real one. Waiting only for the port races into that
+			// init window. "ready to accept connections" is logged twice: wait
+			// for the second.
 			WaitingFor: wait.ForAll(
 				wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(60*time.Second),
 				wait.ForListeningPort("5432/tcp").WithStartupTimeout(60*time.Second),
