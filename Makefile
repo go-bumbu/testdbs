@@ -24,6 +24,21 @@ license-check: ## check for invalid licenses
 .PHONY: verify
 verify: lint license-check test-race ## run all checks (full DB matrix)
 
+# Default coverage threshold is 80
+COVERAGE_THRESHOLD ?= 80
+
+.PHONY: coverage
+coverage: ## check code coverage per package
+	@out=$$(go test -cover -covermode=atomic -alldbs ./...) || { echo "$$out"; exit 1; }; \
+	echo "$$out" | awk -v threshold=$(COVERAGE_THRESHOLD) ' \
+		/\[no test files\]/ { printf "⚠️  %-70s no test files\n", $$2; next } \
+		/coverage:/ { \
+			for (i = 1; i <= NF; i++) if ($$i == "coverage:") { cov = $$(i+1); sub(/%/, "", cov); break }; \
+			if (cov + 0 < threshold) { printf "❌ %-70s %s%% (below %s%%)\n", $$2, cov, threshold; fail = 1 } \
+			else { printf "✅ %-70s %s%%\n", $$2, cov } \
+		} \
+		END { exit fail }'
+
 #==========================================================================================
 ##@ Release
 #==========================================================================================
