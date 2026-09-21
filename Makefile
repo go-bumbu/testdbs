@@ -7,7 +7,7 @@ default: help
 ##@ Testing
 #==========================================================================================
 test: ## run go tests across all DBs (testcontainers, needs Docker)
-	@go test ./... -alldbs
+	@go test ./... -alldbs -cover
 
 test-race: ## run all DBs with the race detector and a coverage report
 	@go test ./... -alldbs -race -cover
@@ -20,9 +20,6 @@ license-check: ## check for invalid licenses
 	# Check licenses, depends on https://github.com/elastic/go-licence-detector
 	@go list -m -mod=readonly  -json all  | go-licence-detector -includeIndirect -rules allowedLicenses.json \
 	-overrides overrideLicenses.json
-
-.PHONY: verify
-verify: lint license-check test-race ## run all checks (full DB matrix)
 
 # Default coverage threshold is 80
 COVERAGE_THRESHOLD ?= 80
@@ -40,7 +37,24 @@ coverage: ## check code coverage per package
 			if (cov + 0 < threshold) { printf "❌ %-70s %s%% (below %s%%)\n", $$2, cov, threshold; fail = 1 } \
 			else { printf "✅ %-70s %s%%\n", $$2, cov } \
 		} \
-		END { exit fail }'
+		END { \
+			if (fail) { printf "❌ coverage below threshold (%s%%)\n", threshold } \
+			else { printf "✅ coverage: all packages >= %s%%\n", threshold }; \
+			exit fail \
+		}'
+
+.PHONY: verify
+verify: ## run all checks (full DB matrix); runs every check and fails if any fail
+	@fail=0; \
+	for target in test-race license-check lint coverage; do \
+		echo "==================== make $$target ===================="; \
+		$(MAKE) --no-print-directory $$target || fail=1; \
+	done; \
+	if [ $$fail -ne 0 ]; then \
+		echo "❌ verify failed (see above)"; \
+		exit 1; \
+	fi; \
+	echo "✅ verify passed"
 
 #==========================================================================================
 ##@ Release
