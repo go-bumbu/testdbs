@@ -1,68 +1,94 @@
 # testdbs
-Utility package to start and stop different DBs in tests
 
-# Usage
+[![Go Reference](https://pkg.go.dev/badge/github.com/go-bumbu/testdbs.svg)](https://pkg.go.dev/github.com/go-bumbu/testdbs)
+[![CI](https://github.com/go-bumbu/testdbs/actions/workflows/test.yml/badge.svg)](https://github.com/go-bumbu/testdbs/actions/workflows/test.yml)
+[![License: LGPL-3.0](https://img.shields.io/badge/license-LGPL--3.0-blue.svg)](LICENSE)
 
-## Modify your tests
+testdbs starts SQLite, MySQL, and Postgres for your Go tests and runs each test against every one of them, through GORM.
+A plain `go test` uses an embedded SQLite; add `-alldbs` to run the full set in Docker containers.
 
-Modify the Main test function to initialize the DBs before the tests are run and to delete after
+## Features
 
+- Run the same test against SQLite, MySQL 9.7, and Postgres 18
+- Keep `go test` fast and Docker-free; turn on the full set with one flag
+- Give each test its own database, so tests don't share tables
+- Open your own connection to MySQL or Postgres, with your own DSN or `gorm.Config`
+- Test against another Postgres image, such as pgvector
+
+## Add to your project
+
+```sh
+go get github.com/go-bumbu/testdbs@latest
 ```
+
+The MySQL, Postgres, and CGo SQLite targets need Docker, and only run with `-alldbs`.
+
+### Start the DBs once per package
+
+```go
 func TestMain(m *testing.M) {
+	// start the DBs before the tests run
 	testdbs.InitDBS()
-	// main block that runs tests
 	code := m.Run()
-	err := testdbs.Clean()
-	if err != nil {
+	// stop the containers and delete the SQLite files
+	if err := testdbs.Clean(); err != nil {
 		os.Exit(1)
 	}
 	os.Exit(code)
 }
 ```
 
-And then in your tests you can iterate over the DBs
+### Run a test on every DB
 
-```
+```go
 func TestMyFunction(t *testing.T) {
-    for _, dbt := range testdbs.DBs() {
-        t.Run(dbt.DbType(), func(t *testing.T) {
-            db := dbt.Conn()
-            // db is *gorm.DB
+	// run the same test once per DB
+	for _, dbt := range testdbs.DBs() {
+		t.Run(dbt.DbType(), func(t *testing.T) {
+			// a *gorm.DB connected to the default database
+			db := dbt.Conn()
 		})
 	}
 }
 ```
 
-if you need to isolate DBs, e.g. run multiple tests on the same db/table
-you can use  `ConnDbName("custom")` to crete a new database wit the passed name.
+To isolate a test, use `dbt.ConnDbName(t.Name())` instead of `dbt.Conn()`: it
+creates a database with that name on first use and reuses its connection after.
 
-note: connections will be reused cross tests for every db name
+### Open your own connection
 
-```
-func TestMyFunction(t *testing.T) {
-    for _, dbt := range testdbs.DBs() {
-        t.Run(dbt.DbType(), func(t *testing.T) {
-            db := dbt.ConnDbName("custom")
-            // db is *gorm.DB
+To test code that builds its own DSN or `gorm.Config`, Postgres and MySQL
+expose their connection parameters. SQLite does not.
+
+```go
+func TestOpen(t *testing.T) {
+	for _, dbt := range testdbs.DBs() {
+		// only Postgres and MySQL expose connection parameters
+		p, ok := dbt.(testdbs.ConnParamsProvider)
+		if !ok {
+			continue
+		}
+		t.Run(dbt.DbType(), func(t *testing.T) {
+			// Host, Port, User, Password, DbName, and SslMode of an isolated database
+			params := p.ConnParamsDbName(t.Name()) // or p.ConnParams() for the default one
+			// open your own connection here, and close it when done
 		})
 	}
 }
 ```
 
+`ConnParamsDbName(name)` points at the same database as `ConnDbName(name)`.
+`SslMode` is `disable` for Postgres and empty for MySQL.
 
-## Custom DBs
+### Use another Postgres image
 
-`InitCustomDbs(fast, slow)` registers your own list instead of the default one:
-the fast DBs always run, the slow ones only with `-alldbs` or `TESTDBS_ALL`.
-
-### Postgres with another image
-
-`NewPostgres(image)` runs any image that starts like the official `postgres`
-image; an empty image keeps the default, `postgres:18`. For example, for the
-pgvector extension:
+`InitCustomDbs(fast, slow)` replaces the default list: fast DBs always run, slow
+ones only with `-alldbs`. `NewPostgres(image)` runs any image that starts like
+the official `postgres` one.
 
 ```go
 func TestMain(m *testing.M) {
+	// Postgres with pgvector, as the only (slow) DB
 	testdbs.InitCustomDbs(nil, []testdbs.TargetDb{
 		testdbs.NewPostgres("pgvector/pgvector:pg18"),
 	})
@@ -72,43 +98,32 @@ func TestMain(m *testing.M) {
 	}
 	os.Exit(code)
 }
-```
 
-Extensions are per database: run `CREATE EXTENSION IF NOT EXISTS vector` on
-every database you open, including each `ConnDbName` one.
-
-### Only slow DBs registered
-
-When every registered DB is a slow one, a plain `go test` selects none and
-`DBs()` returns an empty list. Skip in that case:
-
-```go
 func TestSearch(t *testing.T) {
+	// a plain `go test` selects no slow DBs, so skip
 	dbs := testdbs.DBs()
 	if len(dbs) == 0 {
 		t.Skip("set TESTDBS_ALL=1 (needs Docker) to run the Postgres tests")
 	}
-	db := dbs[0].ConnDbName(t.Name()) // one database per test
-	// ...
+	// extensions are per database: create them in every database you open
+	db := dbs[0].ConnDbName(t.Name())
+	db.Exec("CREATE EXTENSION IF NOT EXISTS vector")
 }
 ```
 
-`DBs()` still panics if neither `InitDBS()` nor `InitCustomDbs()` ran.
+### Run your tests
 
-## running tests
-
-As a default calling `go test` will only start an embedded sqlite on a temp directory, to run the tests with
-all the supported DBs you need to call `go test -alldbs`
-
-Setting the env `TESTDBS_ALL` (any value) does the same as `-alldbs`. `-alldbs` is a flag of the test binary,
-so `go test ./... -alldbs` fails in packages that don't import testdbs; in a module with such packages use
-`TESTDBS_ALL=1 go test ./...` instead.
-
-## sqlite
-
-if you want to inspect the sqlite database after running the tests you can set the env `LOCAL_SQLITE` to true
-and this will create the DB in the current working dir
-
+```sh
+go test ./...                 # embedded SQLite only
+go test ./... -alldbs         # every DB, needs Docker
+TESTDBS_ALL=1 go test ./...   # same, for modules where some packages don't import testdbs
+LOCAL_SQLITE=1 go test ./...  # keep the SQLite files in the working dir to inspect them
 ```
-export LOCAL_SQLITE=true
-```
+
+Full API: [pkg.go.dev/github.com/go-bumbu/testdbs](https://pkg.go.dev/github.com/go-bumbu/testdbs).
+
+## Development
+
+See [DEVELOPMENT.md](DEVELOPMENT.md).
+
+Licensed under the [GNU LGPL v3](LICENSE).

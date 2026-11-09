@@ -22,7 +22,7 @@ type testDBMysql struct {
 	once   sync.Once
 	logger logger.Interface
 	host   string
-	port   string
+	port   int
 	pool   map[string]*gorm.DB
 	clean  func()
 }
@@ -59,6 +59,26 @@ const (
 	mysqlPassword = "password"
 	mysqlUser     = "testuser"
 )
+
+// ConnParams returns the parameters of the default database. See
+// ConnParamsProvider.
+func (c *testDBMysql) ConnParams() ConnParams {
+	return c.ConnParamsDbName(defaultDbName)
+}
+
+// ConnParamsDbName returns the parameters of the database ConnDbName(name)
+// uses, creating it and granting the test user access if needed. See
+// ConnParamsProvider.
+func (c *testDBMysql) ConnParamsDbName(name string) ConnParams {
+	c.ConnDbName(name)
+	return ConnParams{
+		Host:     c.host,
+		Port:     c.port,
+		User:     mysqlUser,
+		Password: mysqlPassword,
+		DbName:   serverDbName(name),
+	}
+}
 
 func (c *testDBMysql) Init(logger logger.Interface) {
 	c.logger = logger
@@ -104,9 +124,9 @@ func (c *testDBMysql) Init(logger logger.Interface) {
 		if err != nil {
 			panic(fmt.Sprintf("failed to get MySQL container port: %v", err))
 		}
-		c.port = port.Port()
+		c.port = port.Int()
 
-		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", mysqlUser, mysqlPassword, host, port.Port(), defaultDbName)
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local", mysqlUser, mysqlPassword, c.host, c.port, defaultDbName)
 		db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 			Logger: logger,
 		})
@@ -134,7 +154,7 @@ func (c *testDBMysql) ConnDbName(name string) *gorm.DB {
 		return dbConn
 	}
 
-	dsn := fmt.Sprintf("root:%s@tcp(%s:%s)/", mysqlPassword, c.host, c.port)
+	dsn := fmt.Sprintf("root:%s@tcp(%s:%d)/", mysqlPassword, c.host, c.port)
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		panic(err)
@@ -154,7 +174,7 @@ func (c *testDBMysql) ConnDbName(name string) *gorm.DB {
 		panic(err)
 	}
 
-	dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", mysqlUser, mysqlPassword, c.host, c.port, name)
+	dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local", mysqlUser, mysqlPassword, c.host, c.port, name)
 	gormDb, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: c.logger,
 	})

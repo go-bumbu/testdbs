@@ -24,7 +24,7 @@ type testDBPostgres struct {
 	once   sync.Once
 	logger logger.Interface
 	host   string
-	port   string
+	port   int
 	pool   map[string]*gorm.DB
 	clean  func()
 }
@@ -96,7 +96,28 @@ func (c *testDBPostgres) DbType() string {
 const (
 	postgresPassword = "password"
 	postgresUser     = "testuser"
+	postgresSslMode  = "disable"
 )
+
+// ConnParams returns the parameters of the default database. See
+// ConnParamsProvider.
+func (c *testDBPostgres) ConnParams() ConnParams {
+	return c.ConnParamsDbName(defaultDbName)
+}
+
+// ConnParamsDbName returns the parameters of the database ConnDbName(name)
+// uses, creating it if needed. See ConnParamsProvider.
+func (c *testDBPostgres) ConnParamsDbName(name string) ConnParams {
+	c.ConnDbName(name)
+	return ConnParams{
+		Host:     c.host,
+		Port:     c.port,
+		User:     postgresUser,
+		Password: postgresPassword,
+		DbName:   serverDbName(name),
+		SslMode:  postgresSslMode,
+	}
+}
 
 func (c *testDBPostgres) Init(logger logger.Interface) {
 	c.logger = logger
@@ -142,9 +163,9 @@ func (c *testDBPostgres) Init(logger logger.Interface) {
 		if err != nil {
 			panic(fmt.Sprintf("failed to get PostgreSQL container port: %v", err))
 		}
-		c.port = port.Port()
+		c.port = port.Int()
 
-		dsn := fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=disable", host, port.Port(), postgresUser, defaultDbName, postgresPassword)
+		dsn := fmt.Sprintf("host=%s port=%d user=%s dbname=%s password=%s sslmode=%s", c.host, c.port, postgresUser, defaultDbName, postgresPassword, postgresSslMode)
 		db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 			Logger: logger,
 		})
@@ -173,7 +194,7 @@ func (c *testDBPostgres) ConnDbName(name string) *gorm.DB {
 		return dbConn
 	}
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s  sslmode=disable", c.host, c.port, postgresUser, postgresPassword, defaultDbName)
+	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s", c.host, c.port, postgresUser, postgresPassword, defaultDbName, postgresSslMode)
 	admin, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: c.logger,
 	})
@@ -192,7 +213,7 @@ func (c *testDBPostgres) ConnDbName(name string) *gorm.DB {
 		_ = sqlDB.Close()
 	}
 
-	dsn = fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=disable", c.host, c.port, postgresUser, name, postgresPassword)
+	dsn = fmt.Sprintf("host=%s port=%d user=%s dbname=%s password=%s sslmode=%s", c.host, c.port, postgresUser, name, postgresPassword, postgresSslMode)
 	gormDb, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: c.logger,
 	})
