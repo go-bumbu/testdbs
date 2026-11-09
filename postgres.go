@@ -19,9 +19,13 @@ const (
 	defaultPostgresImage = "postgres:18"
 )
 
+// testDBPostgres is safe for concurrent use: mu guards pool, and ConnDbName
+// holds it while creating a DB so parallel callers asking for one name share
+// one pool.
 type testDBPostgres struct {
 	image  string // empty means defaultPostgresImage
 	once   sync.Once
+	mu     sync.Mutex
 	logger logger.Interface
 	host   string
 	port   int
@@ -47,6 +51,13 @@ func (c *testDBPostgres) imageName() string {
 }
 
 func (c *testDBPostgres) Close(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closeLocked(name)
+}
+
+// closeLocked closes the named DB; the caller holds mu.
+func (c *testDBPostgres) closeLocked(name string) error {
 	db, exists := c.pool[name]
 	if !exists {
 		return fmt.Errorf("db connection with name %s not found", name)
@@ -78,9 +89,11 @@ func (c *testDBPostgres) Close(name string) error {
 
 func (c *testDBPostgres) CloseAll() error {
 	defer c.clean()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	var merr error
 	for name := range c.pool {
-		err := c.Close(name)
+		err := c.closeLocked(name)
 		if err != nil {
 			merr = multierror.Append(merr, err)
 		}
@@ -188,6 +201,8 @@ func (c *testDBPostgres) Conn() *gorm.DB {
 }
 
 func (c *testDBPostgres) ConnDbName(name string) *gorm.DB {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	name = normalizeDbName(name)
 	dbConn, exists := c.pool[name]
 	if exists {

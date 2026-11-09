@@ -18,8 +18,12 @@ const (
 	DBTypeMysql = "mysql"
 )
 
+// testDBMysql is safe for concurrent use: mu guards pool, and ConnDbName holds
+// it while creating a DB so parallel callers asking for one name share one
+// pool.
 type testDBMysql struct {
 	once   sync.Once
+	mu     sync.Mutex
 	logger logger.Interface
 	host   string
 	port   int
@@ -28,6 +32,14 @@ type testDBMysql struct {
 }
 
 func (c *testDBMysql) Close(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closeLocked(name)
+}
+
+// closeLocked closes the named DB and drops it from the pool; the caller
+// holds mu.
+func (c *testDBMysql) closeLocked(name string) error {
 	db, exists := c.pool[name]
 	if !exists {
 		return fmt.Errorf("db connection with name %s not found", name)
@@ -36,14 +48,20 @@ func (c *testDBMysql) Close(name string) error {
 	if err != nil {
 		return fmt.Errorf("unable to get underlying DB: %w", err)
 	}
-	return under.Close()
+	if err = under.Close(); err != nil {
+		return err
+	}
+	delete(c.pool, name)
+	return nil
 }
 
 func (c *testDBMysql) CloseAll() error {
 	defer c.clean()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	var merr error
 	for name := range c.pool {
-		err := c.Close(name)
+		err := c.closeLocked(name)
 		if err != nil {
 			merr = multierror.Append(merr, err)
 		}
@@ -148,6 +166,8 @@ func (c *testDBMysql) Conn() *gorm.DB {
 }
 
 func (c *testDBMysql) ConnDbName(name string) *gorm.DB {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	name = normalizeDbName(name)
 	dbConn, exists := c.pool[name]
 	if exists {
