@@ -89,3 +89,41 @@ func TestSqliteLocalKeepsFilesUntilNextRun(t *testing.T) {
 		})
 	}
 }
+
+// Closing one DB must leave the target's other DBs usable, delete only that
+// DB's file, and let the same name be opened again.
+func TestSqliteCloseOneKeepsOthers(t *testing.T) {
+	for name, newDb := range sqliteTargets() {
+		t.Run(name, func(t *testing.T) {
+			db := newDb()
+			db.Init(logger.Discard)
+			t.Cleanup(func() {
+				if err := db.CloseAll(); err != nil {
+					t.Errorf("CloseAll() = %v, want nil", err)
+				}
+			})
+
+			closed := sqliteFile(t, db.ConnDbName("closed"))
+			kept := db.ConnDbName("kept")
+
+			if err := db.Close("closed"); err != nil {
+				t.Fatalf("Close(closed) = %v, want nil", err)
+			}
+			if _, err := os.Stat(closed); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("%s still exists after Close (stat error: %v)", closed, err)
+			}
+			if err := db.Close("closed"); err == nil {
+				t.Error("second Close(closed) = nil, want an error")
+			}
+			if err := kept.Exec("CREATE TABLE marker (id INTEGER)").Error; err != nil {
+				t.Errorf("kept db unusable after closing another: %v", err)
+			}
+			if err := db.ConnDbName("other").Exec("SELECT 1").Error; err != nil {
+				t.Errorf("new db unusable after closing another: %v", err)
+			}
+			if err := db.ConnDbName("closed").Exec("SELECT 1").Error; err != nil {
+				t.Errorf("reopened db unusable: %v", err)
+			}
+		})
+	}
+}

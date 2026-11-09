@@ -18,16 +18,28 @@ const (
 	DBTypeMysql = "mysql"
 )
 
+// testDBMysql is safe for concurrent use: mu guards pool, and ConnDbName holds
+// it while creating a DB so parallel callers asking for one name share one
+// pool.
 type testDBMysql struct {
 	once   sync.Once
+	mu     sync.Mutex
 	logger logger.Interface
 	host   string
-	port   string
+	port   int
 	pool   map[string]*gorm.DB
 	clean  func()
 }
 
 func (c *testDBMysql) Close(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closeLocked(name)
+}
+
+// closeLocked closes the named DB and drops it from the pool; the caller
+// holds mu.
+func (c *testDBMysql) closeLocked(name string) error {
 	db, exists := c.pool[name]
 	if !exists {
 		return fmt.Errorf("db connection with name %s not found", name)
@@ -36,14 +48,20 @@ func (c *testDBMysql) Close(name string) error {
 	if err != nil {
 		return fmt.Errorf("unable to get underlying DB: %w", err)
 	}
-	return under.Close()
+	if err = under.Close(); err != nil {
+		return err
+	}
+	delete(c.pool, name)
+	return nil
 }
 
 func (c *testDBMysql) CloseAll() error {
 	defer c.clean()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	var merr error
 	for name := range c.pool {
-		err := c.Close(name)
+		err := c.closeLocked(name)
 		if err != nil {
 			merr = multierror.Append(merr, err)
 		}
@@ -59,6 +77,26 @@ const (
 	mysqlPassword = "password"
 	mysqlUser     = "testuser"
 )
+
+// ConnParams returns the parameters of the default database. See
+// ConnParamsProvider.
+func (c *testDBMysql) ConnParams() ConnParams {
+	return c.ConnParamsDbName(defaultDbName)
+}
+
+// ConnParamsDbName returns the parameters of the database ConnDbName(name)
+// uses, creating it and granting the test user access if needed. See
+// ConnParamsProvider.
+func (c *testDBMysql) ConnParamsDbName(name string) ConnParams {
+	c.ConnDbName(name)
+	return ConnParams{
+		Host:     c.host,
+		Port:     c.port,
+		User:     mysqlUser,
+		Password: mysqlPassword,
+		DbName:   serverDbName(name),
+	}
+}
 
 func (c *testDBMysql) Init(logger logger.Interface) {
 	c.logger = logger
@@ -104,9 +142,9 @@ func (c *testDBMysql) Init(logger logger.Interface) {
 		if err != nil {
 			panic(fmt.Sprintf("failed to get MySQL container port: %v", err))
 		}
-		c.port = port.Port()
+		c.port = port.Int()
 
-		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", mysqlUser, mysqlPassword, host, port.Port(), defaultDbName)
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local", mysqlUser, mysqlPassword, c.host, c.port, defaultDbName)
 		db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 			Logger: logger,
 		})
@@ -128,13 +166,15 @@ func (c *testDBMysql) Conn() *gorm.DB {
 }
 
 func (c *testDBMysql) ConnDbName(name string) *gorm.DB {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	name = normalizeDbName(name)
 	dbConn, exists := c.pool[name]
 	if exists {
 		return dbConn
 	}
 
-	dsn := fmt.Sprintf("root:%s@tcp(%s:%s)/", mysqlPassword, c.host, c.port)
+	dsn := fmt.Sprintf("root:%s@tcp(%s:%d)/", mysqlPassword, c.host, c.port)
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		panic(err)
@@ -154,7 +194,7 @@ func (c *testDBMysql) ConnDbName(name string) *gorm.DB {
 		panic(err)
 	}
 
-	dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", mysqlUser, mysqlPassword, c.host, c.port, name)
+	dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local", mysqlUser, mysqlPassword, c.host, c.port, name)
 	gormDb, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: c.logger,
 	})

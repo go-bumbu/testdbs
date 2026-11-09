@@ -5,8 +5,10 @@ import (
 	"github.com/go-bumbu/testdbs"
 	"github.com/google/go-cmp/cmp"
 	"go.uber.org/goleak"
+	"gorm.io/gorm"
 	"log"
 	"os"
+	"sync"
 	"testing"
 )
 
@@ -144,11 +146,6 @@ func TestStartDbNew(t *testing.T) {
 
 func TestCloseNamedDb(t *testing.T) {
 	for _, dbt := range testdbs.DBs() {
-		// SQLite's Close also deletes the target's temp dir, which the other
-		// tests still use; sqlite_internal_test.go covers it on fresh targets.
-		if dbt.DbType() != testdbs.DBTypeMysql && dbt.DbType() != testdbs.DBTypePostgres {
-			continue
-		}
 		t.Run(dbt.DbType(), func(t *testing.T) {
 			dbt.ConnDbName("closeme")
 			if err := dbt.Close("closeme"); err != nil {
@@ -156,6 +153,41 @@ func TestCloseNamedDb(t *testing.T) {
 			}
 			if err := dbt.Close("missing"); err == nil {
 				t.Error("Close(missing) = nil, want an error")
+			}
+		})
+	}
+}
+
+// Parallel subtests must be able to share a target: each asks for its own DB
+// and for one DB they all share, and the shared name yields a single pool.
+func TestConnDbNameConcurrent(t *testing.T) {
+	const workers = 8
+	for _, dbt := range testdbs.DBs() {
+		t.Run(dbt.DbType(), func(t *testing.T) {
+			var mu sync.Mutex
+			shared := map[*gorm.DB]bool{}
+
+			t.Run("workers", func(t *testing.T) {
+				for i := range workers {
+					t.Run(fmt.Sprintf("w%d", i), func(t *testing.T) {
+						t.Parallel()
+						own := dbt.ConnDbName(t.Name())
+						if err := own.AutoMigrate(&Item{}); err != nil {
+							t.Fatalf("automigrate own db: %v", err)
+						}
+						db := dbt.ConnDbName("concurrentshared")
+						if err := db.Exec("SELECT 1").Error; err != nil {
+							t.Fatalf("query shared db: %v", err)
+						}
+						mu.Lock()
+						shared[db] = true
+						mu.Unlock()
+					})
+				}
+			})
+
+			if len(shared) != 1 {
+				t.Errorf("ConnDbName(concurrentshared) returned %d distinct pools, want 1", len(shared))
 			}
 		})
 	}
