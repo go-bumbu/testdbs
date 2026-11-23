@@ -20,7 +20,7 @@ func openFromParams(t *testing.T, dbType string, p testdbs.ConnParams) *gorm.DB 
 	case testdbs.DBTypePostgres:
 		dialector = postgres.Open(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 			p.Host, p.Port, p.User, p.Password, p.DbName, p.SslMode))
-	case testdbs.DBTypeMysql:
+	case testdbs.DBTypeMysql, testdbs.DBTypeMariadb:
 		dialector = mysql.Open(fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=True",
 			p.User, p.Password, p.Host, p.Port, p.DbName))
 	default:
@@ -48,7 +48,7 @@ func TestConnParams(t *testing.T) {
 	for _, dbt := range testdbs.DBs() {
 		p, ok := dbt.(testdbs.ConnParamsProvider)
 		switch dbt.DbType() {
-		case testdbs.DBTypePostgres, testdbs.DBTypeMysql:
+		case testdbs.DBTypePostgres, testdbs.DBTypeMysql, testdbs.DBTypeMariadb:
 			if !ok {
 				t.Fatalf("%s target does not implement ConnParamsProvider", dbt.DbType())
 			}
@@ -111,13 +111,14 @@ func TestConnParams(t *testing.T) {
 		})
 	}
 	if !ran {
-		t.Skip("no Postgres or MySQL target: run with -alldbs or TESTDBS_ALL")
+		t.Skip("no Postgres, MySQL or MariaDB target: run with -alldbs or TESTDBS_ALL")
 	}
 }
 
 func TestConnParamsNotOnSqlite(t *testing.T) {
 	for _, dbt := range testdbs.DBs() {
-		if dbt.DbType() == testdbs.DBTypePostgres || dbt.DbType() == testdbs.DBTypeMysql {
+		switch dbt.DbType() {
+		case testdbs.DBTypePostgres, testdbs.DBTypeMysql, testdbs.DBTypeMariadb:
 			continue
 		}
 		if _, ok := dbt.(testdbs.ConnParamsProvider); ok {

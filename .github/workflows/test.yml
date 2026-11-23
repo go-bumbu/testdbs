@@ -3,7 +3,8 @@ on: [push]
 jobs:
   test:
     # ubuntu-latest ships a working Docker daemon, which testcontainers-go
-    # uses to spin up the MySQL / PostgreSQL / CGo-SQLite backends. Unlike
+    # uses to spin up the MariaDB / MySQL / PostgreSQL / CGo-SQLite backends
+    # (MySQL is opt-in for users; the package's own TestMain adds it). Unlike
     # consumers of this library, testdbs runs the full -alldbs matrix in CI:
     # launching those containers is the core behaviour under test.
     runs-on: ubuntu-latest

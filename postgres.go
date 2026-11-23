@@ -36,8 +36,10 @@ type testDBPostgres struct {
 // NewPostgres returns a Postgres target that runs image instead of the default
 // postgres:18, e.g. "pgvector/pgvector:pg18" for the vector extension. An empty
 // image keeps the default. The image must start like the official postgres
-// image: same env vars, and "database system is ready to accept connections"
-// logged twice (initdb's temporary server, then the real one).
+// image: same env vars, the same entrypoint (the container command is set to
+// "postgres -c ..." to turn durability off), and "database system is ready to
+// accept connections" logged twice (initdb's temporary server, then the real
+// one).
 func NewPostgres(image string) TargetDb {
 	return &testDBPostgres{image: image}
 }
@@ -67,15 +69,6 @@ func (c *testDBPostgres) closeLocked(name string) error {
 		return fmt.Errorf("unable to get underlying DB: %w", err)
 	}
 
-	// Set the max connections to zero before closing
-	underlyingDb.SetMaxOpenConns(1)
-	underlyingDb.SetMaxIdleConns(0)
-	underlyingDb.SetConnMaxLifetime(time.Microsecond)
-
-	// Wait a little to allow existing connections to close
-	time.Sleep(100 * time.Millisecond)
-
-	// Close the database connection
 	err = underlyingDb.Close()
 	if err != nil {
 		return fmt.Errorf("error closing database connection: %w", err)
@@ -110,6 +103,8 @@ const (
 	postgresPassword = "password"
 	postgresUser     = "testuser"
 	postgresSslMode  = "disable"
+	// postgresDataDir is the in-memory data directory.
+	postgresDataDir = "/pgdata"
 )
 
 // ConnParams returns the parameters of the default database. See
@@ -142,7 +137,19 @@ func (c *testDBPostgres) Init(logger logger.Interface) {
 		req := testcontainers.ContainerRequest{
 			Image:        c.imageName(),
 			ExposedPorts: []string{"5432/tcp"},
+			// A test database never needs to survive a crash: skip fsync and
+			// keep the data in memory. The tmpfs gets its own path, set as
+			// PGDATA: the images' own data paths differ by version, and on
+			// images before 18 an anonymous volume would hide a tmpfs there.
+			Cmd: []string{
+				"postgres",
+				"-c", "fsync=off",
+				"-c", "synchronous_commit=off",
+				"-c", "full_page_writes=off",
+			},
+			Tmpfs: map[string]string{postgresDataDir: "rw"},
 			Env: map[string]string{
+				"PGDATA":            postgresDataDir,
 				"POSTGRES_USER":     postgresUser,
 				"POSTGRES_PASSWORD": postgresPassword,
 				"POSTGRES_DB":       defaultDbName,
