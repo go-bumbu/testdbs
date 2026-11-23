@@ -16,12 +16,15 @@ import (
 
 const (
 	DBTypeMysql = "mysql"
+	// defaultMysqlImage runs when no image is given.
+	defaultMysqlImage = "mysql:9.7"
 )
 
 // testDBMysql is safe for concurrent use: mu guards pool, and ConnDbName holds
 // it while creating a DB so parallel callers asking for one name share one
 // pool.
 type testDBMysql struct {
+	image  string // empty means defaultMysqlImage
 	once   sync.Once
 	mu     sync.Mutex
 	logger logger.Interface
@@ -29,6 +32,25 @@ type testDBMysql struct {
 	port   int
 	pool   map[string]*gorm.DB
 	clean  func()
+}
+
+// NewMysql returns a MySQL target that runs image instead of the default
+// mysql:9.7, e.g. "mysql:8.4" for the LTS release. An empty image keeps the
+// default. The image must start like the official mysql image, 8.0.30 or
+// later: same env vars, the same entrypoint (the container command is set to
+// "mysqld --..." to turn durability off), and the real server logging
+// "mysqld: ready for connections" with "port: 3306". MariaDB images log
+// "mariadbd" instead and are not supported.
+func NewMysql(image string) TargetDb {
+	return &testDBMysql{image: image}
+}
+
+// imageName returns the image to run, falling back to the default.
+func (c *testDBMysql) imageName() string {
+	if c.image == "" {
+		return defaultMysqlImage
+	}
+	return c.image
 }
 
 func (c *testDBMysql) Close(name string) error {
@@ -106,7 +128,7 @@ func (c *testDBMysql) Init(logger logger.Interface) {
 		ctx := context.Background()
 
 		req := testcontainers.ContainerRequest{
-			Image:        "mysql:9.7",
+			Image:        c.imageName(),
 			ExposedPorts: []string{"3306/tcp"},
 			// A test database never needs to survive a crash: don't flush the
 			// redo log per commit, skip the doublewrite buffer and the binary

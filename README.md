@@ -14,7 +14,7 @@ A plain `go test` uses an embedded SQLite; add `-alldbs` to run the full set in 
 - Give each test its own database, so tests don't share tables
 - Run the MySQL and Postgres containers in memory with durability off (no fsync), so the suite runs faster
 - Open your own connection to MySQL or Postgres, with your own DSN or `gorm.Config`
-- Test against another Postgres image, such as pgvector
+- Test against another Postgres or MySQL image, such as pgvector or MySQL 8.4
 
 ## Add to your project
 
@@ -81,11 +81,13 @@ func TestOpen(t *testing.T) {
 `ConnParamsDbName(name)` points at the same database as `ConnDbName(name)`.
 `SslMode` is `disable` for Postgres and empty for MySQL.
 
-### Use another Postgres image
+### Use another Postgres or MySQL image
 
 `InitCustomDbs(fast, slow)` replaces the default list: fast DBs always run, slow
 ones only with `-alldbs`. `NewPostgres(image)` runs any image that starts like
-the official `postgres` one.
+the official `postgres` one. `NewMysql(image)` does the same for the official
+`mysql` image, 8.0.30 or later (e.g. `testdbs.NewMysql("mysql:8.4")`); MariaDB
+images are not supported. An empty image keeps the default.
 
 ```go
 func TestMain(m *testing.M) {
