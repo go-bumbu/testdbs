@@ -1,5 +1,9 @@
 name: golang
-on: [push]
+# Same triggers as the lint and license workflows: PRs, plus pushes to main.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
 jobs:
   test:
     # ubuntu-latest ships a working Docker daemon, which testcontainers-go

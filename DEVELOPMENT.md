@@ -52,7 +52,8 @@ Two kinds of tests check testdbs as a user sees it:
   see it. After changing the main `go.mod`, run `go mod tidy` in it too.
 
 CI runs `make test` with the coverage gate, `make test-consumer`, the lint, and
-the license check on every push and pull request (`.github/workflows/`).
+the license check on every pull request and every push to `main`
+(`.github/workflows/`).
 
 ## Release
 
