@@ -12,6 +12,7 @@ A plain `go test` uses an embedded SQLite; add `-alldbs` to run the full set in 
 - Run the same test against SQLite, MySQL 9.7, and Postgres 18
 - Keep `go test` fast and Docker-free; turn on the full set with one flag
 - Give each test its own database, so tests don't share tables
+- Run the MySQL and Postgres containers in memory with durability off (no fsync), so the suite runs faster
 - Open your own connection to MySQL or Postgres, with your own DSN or `gorm.Config`
 - Test against another Postgres image, such as pgvector
 

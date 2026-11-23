@@ -108,6 +108,16 @@ func (c *testDBMysql) Init(logger logger.Interface) {
 		req := testcontainers.ContainerRequest{
 			Image:        "mysql:9.7",
 			ExposedPorts: []string{"3306/tcp"},
+			// A test database never needs to survive a crash: don't flush the
+			// redo log per commit, skip the doublewrite buffer and the binary
+			// log (on by default since 8.0), and keep the data in memory.
+			Cmd: []string{
+				"mysqld",
+				"--innodb-flush-log-at-trx-commit=0",
+				"--innodb-doublewrite=OFF",
+				"--skip-log-bin",
+			},
+			Tmpfs: map[string]string{"/var/lib/mysql": "rw"},
 			Env: map[string]string{
 				"MYSQL_ROOT_PASSWORD": mysqlPassword,
 				"MYSQL_DATABASE":      defaultDbName,
