@@ -9,7 +9,7 @@ Postgres targets start containers with testcontainers-go.
 
 ## Prerequisites
 
-- Go 1.24 (from `go.mod`). Keep the `go` directive and dependency versions
+- Go 1.26 (from `go.mod`). Keep the `go` directive and dependency versions
   low: downstream apps inherit them as their floor.
 - Docker, for the MySQL, Postgres, and CGo SQLite targets. Every `make` test
   target runs the full `-alldbs` set.
