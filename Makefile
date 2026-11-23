@@ -9,15 +9,21 @@ default: help
 # Cover profile written by `make test` / `make test-race` and read by `make coverage`, so verify runs the suite once.
 COVER_PROFILE ?= coverage.out
 
+# VERBOSE=1 adds -v: go test then streams the output of passing packages too, so
+# the testcontainers logs show each DB container being created, started, stopped
+# and terminated. Off by default; CI turns it on.
+VERBOSE ?= 0
+GO_TEST_V := $(if $(filter 1,$(VERBOSE)),-v)
+
 # -alldbs must follow the package list: placed before it, go test passes ./...
 # to the test binary and only tests the current directory.
 test: ## run go tests across all DBs (testcontainers, needs Docker), writing the cover profile
 	@rm -f $(COVER_PROFILE)
-	@go test ./... -alldbs -covermode=atomic -coverprofile=$(COVER_PROFILE)
+	@go test ./... -alldbs $(GO_TEST_V) -covermode=atomic -coverprofile=$(COVER_PROFILE)
 
 test-race: ## same as test, with the race detector
 	@rm -f $(COVER_PROFILE)
-	@go test ./... -alldbs -race -covermode=atomic -coverprofile=$(COVER_PROFILE)
+	@go test ./... -alldbs -race $(GO_TEST_V) -covermode=atomic -coverprofile=$(COVER_PROFILE)
 
 CONSUMER_DIR := testdata/consumer
 
@@ -26,8 +32,8 @@ CONSUMER_DIR := testdata/consumer
 # `go test` (embedded SQLite only) and one with TESTDBS_ALL (every DB, needs
 # Docker); -count=1 because go test caches results that read env vars.
 test-consumer: ## run the consumer module's tests, as a user would: plain and with TESTDBS_ALL
-	@cd $(CONSUMER_DIR) && go test ./... -count=1
-	@cd $(CONSUMER_DIR) && TESTDBS_ALL=1 go test ./... -count=1
+	@cd $(CONSUMER_DIR) && go test ./... -count=1 $(GO_TEST_V)
+	@cd $(CONSUMER_DIR) && TESTDBS_ALL=1 go test ./... -count=1 $(GO_TEST_V)
 
 lint: ## run go linter
 	# check lining, depends on https://github.com/golangci/golangci-lint

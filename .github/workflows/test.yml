@@ -14,6 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: 1
+      # make test / test-consumer run go test -v, to show the DB containers
+      # starting and stopping in the CI log
+      VERBOSE: 1
     steps:
       - uses: actions/checkout@v5
 

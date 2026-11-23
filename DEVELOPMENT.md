@@ -28,6 +28,7 @@ make help           # list the targets
 make test           # tests on every DB; writes the cover profile coverage.out
 make test-race      # same, with the race detector
 make test-consumer  # the consumer module's tests, plain and with TESTDBS_ALL
+make test VERBOSE=1 # any test target: go test -v, shows the DB containers start and stop
 make lint           # golangci-lint
 make license-check  # fail on dependencies outside allowedLicenses.json
 make coverage       # fail if coverage.out is below 80% (COVERAGE_THRESHOLD=…); runs no tests
