@@ -21,6 +21,11 @@ func TestDurabilityOff(t *testing.T) {
 			{"SELECT @@innodb_doublewrite", "OFF"},
 			{"SELECT @@log_bin", "0"},
 		},
+		testdbs.DBTypeMariadb: {
+			{"SELECT @@innodb_flush_log_at_trx_commit", "0"},
+			{"SELECT @@innodb_doublewrite", "OFF"},
+			{"SELECT @@log_bin", "0"},
+		},
 	}
 	ran := false
 	for _, dbt := range testdbs.DBs() {
@@ -42,6 +47,6 @@ func TestDurabilityOff(t *testing.T) {
 		})
 	}
 	if !ran {
-		t.Skip("no Postgres or MySQL target: run with -alldbs or TESTDBS_ALL")
+		t.Skip("no Postgres, MySQL or MariaDB target: run with -alldbs or TESTDBS_ALL")
 	}
 }

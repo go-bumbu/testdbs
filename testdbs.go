@@ -28,14 +28,27 @@ const (
 	defaultDbName  = "testdbDefault"
 )
 
+// InitDBS initializes the default DBs: SQLite without CGo always, and SQLite
+// with CGo, MariaDB, and Postgres with -alldbs or TESTDBS_ALL. MySQL is not in
+// the default set; pass NewMysql to InitCustomDbs to run it. Call it once,
+// from TestMain.
 func InitDBS() {
-	fast := []TargetDb{&SqliteNoCgo{}}
-	long := []TargetDb{
+	InitCustomDbs(DefaultDbs())
+}
+
+// DefaultDbs returns new instances of the fast and slow DBs InitDBS runs, to
+// extend them before calling InitCustomDbs, e.g. to also run MySQL:
+//
+//	fast, slow := testdbs.DefaultDbs()
+//	testdbs.InitCustomDbs(fast, append(slow, testdbs.NewMysql("")))
+func DefaultDbs() (fast, slow []TargetDb) {
+	fast = []TargetDb{&SqliteNoCgo{}}
+	slow = []TargetDb{
 		&SqliteCgo{},
-		&testDBMysql{},
-		&testDBPostgres{},
+		NewMariadb(""),
+		NewPostgres(""),
 	}
-	InitCustomDbs(fast, long)
+	return fast, slow
 }
 
 // InitCustomDbs initializes the given DBs and makes them available through

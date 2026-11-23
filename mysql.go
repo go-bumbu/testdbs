@@ -20,11 +20,26 @@ const (
 	defaultMysqlImage = "mysql:9.7"
 )
 
-// testDBMysql is safe for concurrent use: mu guards pool, and ConnDbName holds
-// it while creating a DB so parallel callers asking for one name share one
-// pool.
+// mysqlFlavor is what differs between MySQL and MariaDB: they share the
+// protocol, the GORM driver, the image's env vars and entrypoint, so one
+// target type runs both.
+type mysqlFlavor struct {
+	dbType       string
+	name         string // for error messages
+	defaultImage string
+}
+
+var (
+	flavorMysql   = mysqlFlavor{dbType: DBTypeMysql, name: "MySQL", defaultImage: defaultMysqlImage}
+	flavorMariadb = mysqlFlavor{dbType: DBTypeMariadb, name: "MariaDB", defaultImage: defaultMariadbImage}
+)
+
+// testDBMysql runs MySQL or MariaDB, per flavor; the zero value is MySQL.
+// It is safe for concurrent use: mu guards pool, and ConnDbName holds it while
+// creating a DB so parallel callers asking for one name share one pool.
 type testDBMysql struct {
-	image  string // empty means defaultMysqlImage
+	flavor mysqlFlavor
+	image  string // empty means the flavor's default image
 	once   sync.Once
 	mu     sync.Mutex
 	logger logger.Interface
@@ -34,21 +49,29 @@ type testDBMysql struct {
 	clean  func()
 }
 
-// NewMysql returns a MySQL target that runs image instead of the default
-// mysql:9.7, e.g. "mysql:8.4" for the LTS release. An empty image keeps the
-// default. The image must start like the official mysql image, 8.0.30 or
-// later: same env vars, the same entrypoint (the container command is set to
-// "mysqld --..." to turn durability off), and the real server logging
-// "mysqld: ready for connections" with "port: 3306". MariaDB images log
-// "mariadbd" instead and are not supported.
+// NewMysql returns a MySQL target. InitDBS runs MariaDB instead, so pass this
+// to InitCustomDbs to test on MySQL. An empty image runs the default
+// mysql:9.7; give another, e.g. "mysql:8.4", to run that. The image must start
+// like the official mysql image, 8.0.30 or later: same env vars, the same
+// entrypoint (the container command is server flags only, to turn durability
+// off), and the real server logging "mysqld: ready for connections" with
+// "port: 3306". Use NewMariadb for MariaDB images.
 func NewMysql(image string) TargetDb {
-	return &testDBMysql{image: image}
+	return &testDBMysql{flavor: flavorMysql, image: image}
 }
 
-// imageName returns the image to run, falling back to the default.
+// flavorOrDefault returns the flavor, MySQL for the zero value.
+func (c *testDBMysql) flavorOrDefault() mysqlFlavor {
+	if c.flavor.dbType == "" {
+		return flavorMysql
+	}
+	return c.flavor
+}
+
+// imageName returns the image to run, falling back to the flavor's default.
 func (c *testDBMysql) imageName() string {
 	if c.image == "" {
-		return defaultMysqlImage
+		return c.flavorOrDefault().defaultImage
 	}
 	return c.image
 }
@@ -92,7 +115,7 @@ func (c *testDBMysql) CloseAll() error {
 }
 
 func (c *testDBMysql) DbType() string {
-	return DBTypeMysql
+	return c.flavorOrDefault().dbType
 }
 
 const (
@@ -132,9 +155,10 @@ func (c *testDBMysql) Init(logger logger.Interface) {
 			ExposedPorts: []string{"3306/tcp"},
 			// A test database never needs to survive a crash: don't flush the
 			// redo log per commit, skip the doublewrite buffer and the binary
-			// log (on by default since 8.0), and keep the data in memory.
+			// log (on by default since MySQL 8.0), and keep the data in
+			// memory. Flags only, no server binary: both images' entrypoints
+			// prepend theirs (mysqld, mariadbd) when the first arg is a flag.
 			Cmd: []string{
-				"mysqld",
 				"--innodb-flush-log-at-trx-commit=0",
 				"--innodb-doublewrite=OFF",
 				"--skip-log-bin",
@@ -146,33 +170,35 @@ func (c *testDBMysql) Init(logger logger.Interface) {
 				"MYSQL_USER":          mysqlUser,
 				"MYSQL_PASSWORD":      mysqlPassword,
 			},
-			// The mysql image runs a temporary server for init (no TCP, logged
-			// with "port: 0"), then restarts the real one. Waiting only for the
-			// port proved flaky (intermittent "unexpected EOF" / "invalid
-			// connection"), and both servers, plus their X Plugin, log "ready
-			// for connections", so wait for the real server's line on port 3306.
+			// The mysql and mariadb images run a temporary server for init (no
+			// TCP, logged with "port: 0"), then restart the real one. Waiting
+			// only for the port proved flaky (intermittent "unexpected EOF" /
+			// "invalid connection"), and both servers, plus MySQL's X Plugin
+			// (port 33060), log "ready for connections", so wait for the real
+			// server's line on port 3306. MariaDB breaks that line before
+			// "Version:", hence \s+ rather than a space.
 			WaitingFor: wait.ForAll(
-				wait.ForLog(`mysqld: ready for connections.*port: 3306\b`).AsRegexp().WithStartupTimeout(60*time.Second),
+				wait.ForLog(`(mysqld|mariadbd): ready for connections\.\s+Version:.*port: 3306\b`).AsRegexp().WithStartupTimeout(60*time.Second),
 				wait.ForListeningPort("3306/tcp").WithStartupTimeout(60*time.Second),
 			),
 		}
-		mysqlContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 			ContainerRequest: req,
 			Started:          true,
 		})
 		if err != nil {
-			panic(fmt.Sprintf("failed to start MySQL container: %v", err))
+			panic(fmt.Sprintf("failed to start %s container: %v", c.flavorOrDefault().name, err))
 		}
 
-		host, err := mysqlContainer.Host(ctx)
+		host, err := container.Host(ctx)
 		if err != nil {
-			panic(fmt.Sprintf("failed to get MySQL container host: %v", err))
+			panic(fmt.Sprintf("failed to get %s container host: %v", c.flavorOrDefault().name, err))
 		}
 		c.host = host
 
-		port, err := mysqlContainer.MappedPort(ctx, "3306")
+		port, err := container.MappedPort(ctx, "3306")
 		if err != nil {
-			panic(fmt.Sprintf("failed to get MySQL container port: %v", err))
+			panic(fmt.Sprintf("failed to get %s container port: %v", c.flavorOrDefault().name, err))
 		}
 		c.port = port.Int()
 
@@ -181,11 +207,11 @@ func (c *testDBMysql) Init(logger logger.Interface) {
 			Logger: logger,
 		})
 		if err != nil {
-			panic(fmt.Sprintf("failed to connect to MySQL test database: %v", err))
+			panic(fmt.Sprintf("failed to connect to %s test database: %v", c.flavorOrDefault().name, err))
 		}
 		cleanFn := func() {
-			if err := mysqlContainer.Terminate(ctx); err != nil {
-				panic(fmt.Sprintf("failed to terminate MySQL container: %v", err))
+			if err := container.Terminate(ctx); err != nil {
+				panic(fmt.Sprintf("failed to terminate %s container: %v", c.flavorOrDefault().name, err))
 			}
 		}
 		c.clean = cleanFn
@@ -231,7 +257,7 @@ func (c *testDBMysql) ConnDbName(name string) *gorm.DB {
 		Logger: c.logger,
 	})
 	if err != nil {
-		panic(fmt.Sprintf("failed to connect to MySQL test database: %v", err))
+		panic(fmt.Sprintf("failed to connect to %s test database: %v", c.flavorOrDefault().name, err))
 	}
 
 	c.pool[name] = gormDb

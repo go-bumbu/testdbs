@@ -13,7 +13,10 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	testdbs.InitDBS()
+	// The default DBs plus MySQL, which InitDBS leaves out, so every test runs
+	// on MySQL too.
+	fast, slow := testdbs.DefaultDbs()
+	testdbs.InitCustomDbs(fast, append(slow, testdbs.NewMysql("")))
 	// main block that runs tests
 	code := m.Run()
 	err := testdbs.Clean()

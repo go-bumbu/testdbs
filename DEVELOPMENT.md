@@ -4,14 +4,16 @@
 
 testdbs is a single Go package at the repository root. `testdbs.go` holds the
 public API and DB selection, with one file per target (`sqlite.go`, `mysql.go`,
-`postgres.go`) and the connection parameters in `connparams.go`. The MySQL and
-Postgres targets start containers with testcontainers-go.
+`mariadb.go`, `postgres.go`) and the connection parameters in `connparams.go`.
+MariaDB and MySQL share one target type in `mysql.go`; `mariadb.go` only sets
+its flavor. The server targets start containers with testcontainers-go. The
+package's own `TestMain` adds MySQL to the defaults, so tests cover both.
 
 ## Prerequisites
 
 - Go 1.26 (from `go.mod`). Keep the `go` directive and dependency versions
   low: downstream apps inherit them as their floor.
-- Docker, for the MySQL, Postgres, and CGo SQLite targets. Every `make` test
+- Docker, for the MariaDB, MySQL, Postgres, and CGo SQLite targets. Every `make` test
   target runs the full `-alldbs` set.
 - A C compiler and `CGO_ENABLED=1`, for the CGo SQLite target.
 - [golangci-lint](https://github.com/golangci/golangci-lint) v2.12 for `make lint`.
