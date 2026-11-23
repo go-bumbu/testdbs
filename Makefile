@@ -19,6 +19,16 @@ test-race: ## same as test, with the race detector
 	@rm -f $(COVER_PROFILE)
 	@go test ./... -alldbs -race -covermode=atomic -coverprofile=$(COVER_PROFILE)
 
+CONSUMER_DIR := testdata/consumer
+
+# A separate module that imports testdbs like a user's project, with a package
+# that uses it (InitDBS in TestMain) and one that doesn't. It runs a plain
+# `go test` (embedded SQLite only) and one with TESTDBS_ALL (every DB, needs
+# Docker); -count=1 because go test caches results that read env vars.
+test-consumer: ## run the consumer module's tests, as a user would: plain and with TESTDBS_ALL
+	@cd $(CONSUMER_DIR) && go test ./... -count=1
+	@cd $(CONSUMER_DIR) && TESTDBS_ALL=1 go test ./... -count=1
+
 lint: ## run go linter
 	# check lining, depends on https://github.com/golangci/golangci-lint
 	@golangci-lint run
@@ -62,7 +72,7 @@ coverage: ## gate per-package coverage on the cover profile of `make test` / `ma
 .PHONY: verify
 verify: ## run all checks (full DB matrix); runs every check and fails if any fail
 	@fail=0; \
-	for target in test-race license-check lint coverage; do \
+	for target in test-race test-consumer license-check lint coverage; do \
 		echo "==================== make $$target ===================="; \
 		$(MAKE) --no-print-directory $$target || fail=1; \
 	done; \

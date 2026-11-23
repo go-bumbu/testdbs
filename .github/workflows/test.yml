@@ -20,3 +20,11 @@ jobs:
 
       - name: run tests
         run: make test
+
+      # reads the cover profile `make test` wrote; runs no tests of its own
+      - name: ensure test coverage
+        run: make coverage
+
+      # a separate module using testdbs as a user would: plain and TESTDBS_ALL
+      - name: run consumer tests
+        run: make test-consumer
