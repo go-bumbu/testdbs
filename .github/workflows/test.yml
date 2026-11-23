@@ -1,5 +1,9 @@
 name: golang
-on: [push]
+# Same triggers as the lint and license workflows: PRs, plus pushes to main.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
 jobs:
   test:
     # ubuntu-latest ships a working Docker daemon, which testcontainers-go
@@ -20,3 +24,11 @@ jobs:
 
       - name: run tests
         run: make test
+
+      # reads the cover profile `make test` wrote; runs no tests of its own
+      - name: ensure test coverage
+        run: make coverage
+
+      # a separate module using testdbs as a user would: plain and TESTDBS_ALL
+      - name: run consumer tests
+        run: make test-consumer
