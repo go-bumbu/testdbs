@@ -25,13 +25,16 @@ package's own `TestMain` adds MySQL to the defaults, so tests cover both.
 
 ```sh
 make help           # list the targets
-make test           # tests on every DB, with coverage
+make test           # tests on every DB; writes the cover profile coverage.out
 make test-race      # same, with the race detector
 make lint           # golangci-lint
 make license-check  # fail on dependencies outside allowedLicenses.json
-make coverage       # fail if coverage is below 80% (COVERAGE_THRESHOLD=…)
-make verify         # all of the above; run it before opening a PR
+make coverage       # fail if coverage.out is below 80% (COVERAGE_THRESHOLD=…); runs no tests
+make verify         # test-race, license-check, lint, coverage; run it before opening a PR
 ```
+
+`make coverage` only reads the profile the last `make test` or `make test-race`
+wrote, so `verify` starts the DB containers once.
 
 For a quick run without Docker, `go test ./...` tests only the pure-Go SQLite
 target.

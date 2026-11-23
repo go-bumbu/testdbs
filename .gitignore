@@ -13,4 +13,7 @@
 *.iml
 .idea/
 *.sqlite
+
+# cover profile of `make test` / `make test-race`, read by `make coverage`
+coverage.out
 .directory
